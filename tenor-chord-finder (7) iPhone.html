@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e0c0a">
+<title>Tenor Chord Finder — GDAD</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0c0a;
+    --surface: #1a1712;
+    --surface2: #252118;
+    --gold: #c9a84c;
+    --gold-light: #e8c96a;
+    --gold-dim: #7a6230;
+    --cream: #f0e8d8;
+    --muted: #6b5f4a;
+    --fret-line: #3d3428;
+    --open: #4a7c59;
+    --radius: 4px;
+    --sidebar-w: 148px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--cream); font-family:'DM Mono',monospace; min-height:100vh; }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events:none; z-index:999; opacity:0.4;
+  }
+
+  /* ── Header ── */
+  header { text-align:center; padding:2rem 1rem 1.5rem; border-bottom:1px solid var(--fret-line); position:relative; }
+  header::after { content:''; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%); width:60px; height:2px; background:var(--gold); }
+  .logo-tag { font-size:.58rem; letter-spacing:.45em; color:var(--gold-dim); text-transform:uppercase; margin-bottom:.5rem; }
+  h1 { font-family:'Playfair Display',serif; font-size:clamp(1.6rem,4vw,2.6rem); font-weight:900; color:var(--cream); line-height:1; letter-spacing:-.02em; }
+  h1 span { color:var(--gold); }
+  .tuning-badge { display:inline-block; margin-top:.7rem; padding:.2rem .8rem; border:1px solid var(--gold-dim); border-radius:2px; font-size:.68rem; letter-spacing:.3em; color:var(--gold); }
+
+  /* ── App layout ── */
+  .top-bar {
+    border-bottom: 1px solid var(--fret-line);
+    padding: 1rem 1.5rem;
+  }
+  .top-bar .btn-group-label { margin-bottom: .5rem; }
+  .btn-grid-root {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+  }
+
+  .app-layout {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: calc(100vh - 160px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    border-right: 1px solid var(--fret-line);
+    padding: 1.2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    position: sticky;
+    top: 0;
+    height: calc(100vh - 160px);
+    overflow-y: auto;
+  }
+  .btn-group-label {
+    font-size:.55rem; letter-spacing:.32em; color:var(--gold-dim);
+    text-transform:uppercase; margin-bottom:.4rem;
+  }
+  .btn-grid-type {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+  .sel-btn {
+    background:var(--surface); border:1px solid var(--fret-line); border-radius:var(--radius);
+    padding:.38rem .5rem; font-family:'DM Mono',monospace; font-size:.8rem;
+    color:var(--muted); cursor:pointer; transition:all .12s;
+    text-align:center; white-space:nowrap;
+  }
+  .sel-btn:hover { border-color:var(--gold-dim); color:var(--cream); }
+  .sel-btn.active {
+    background:color-mix(in srgb,var(--gold) 15%,var(--surface));
+    border-color:var(--gold); color:var(--gold-light);
+  }
+  .sel-btn.sharp { color:#777; font-size:.72rem; }
+  .sel-btn.sharp.active { color:var(--gold-light); }
+  .sel-btn.type-btn { text-align:left; padding:.38rem .6rem; font-size:.76rem; }
+  .sel-btn.extended { color:#5a7a8a; }
+  .sel-btn.extended:hover { border-color:#2e6a8a; color:#7ec8e3; }
+  .sel-btn.extended.active { background:color-mix(in srgb,#4a8cb8 15%,var(--surface)); border-color:#2e6a8a; color:#7ec8e3; }
+  .type-divider { font-size:.52rem; letter-spacing:.28em; color:#3a4a50; text-transform:uppercase; margin-top:.6rem; margin-bottom:.2rem; padding-left:.1rem; }
+
+  /* ── Main content ── */
+  .main-content {
+    padding: 1.5rem 1.5rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  /* ── Chord display ── */
+  .chord-display { display:flex; flex-direction:column; gap:1.4rem; }
+  .chord-header { display:flex; align-items:baseline; gap:.8rem; flex-wrap:wrap; }
+  .chord-name-display { font-family:'Playfair Display',serif; font-size:2.8rem; font-weight:700; color:var(--gold); line-height:1; }
+  .chord-quality-display { font-size:.65rem; letter-spacing:.28em; color:var(--muted); text-transform:uppercase; }
+  .shape-label { margin-left:auto; font-size:.6rem; letter-spacing:.2em; color:var(--gold-dim); text-transform:uppercase; }
+  .fretboard-wrap { overflow-x:auto; border:1px solid var(--fret-line); border-radius:6px; background:#100d09; padding:1rem .6rem .8rem; cursor:pointer; touch-action:pan-x; -webkit-overflow-scrolling:touch; }
+  .fretboard-wrap:active { background:#0d0b08; }
+  svg.fretboard { display:block; overflow:visible; pointer-events:all; }
+  /* Safe area for iPhone notch/home bar */
+  .main-content { padding-bottom: max(4rem, env(safe-area-inset-bottom)); }
+  .hint { font-size:.58rem; color:var(--muted); letter-spacing:.15em; margin-top:.4rem; text-align:center; opacity:.6; }
+  .info-row { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; }
+  @media(max-width:700px){ .info-row { grid-template-columns:1fr; } }
+  .info-block h3 { font-size:.58rem; letter-spacing:.3em; color:var(--gold-dim); text-transform:uppercase; margin-bottom:.6rem; }
+  .notes-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.35rem; }
+  .note-card { background:var(--surface); border:1px solid var(--fret-line); border-radius:var(--radius); padding:.5rem .25rem; text-align:center; }
+  .note-card .s-label { font-size:.55rem; color:var(--muted); letter-spacing:.15em; margin-bottom:.12rem; }
+  .note-card .n-name  { font-size:1rem; font-weight:500; color:var(--cream); }
+  .note-card .f-num   { font-size:.55rem; color:var(--gold-dim); margin-top:.08rem; }
+  .note-card.is-open .n-name { color:var(--open); }
+  .tone-pills { display:flex; flex-wrap:wrap; gap:.3rem .6rem; }
+  .tone-pill { font-size:.8rem; color:var(--muted); }
+  .tone-pill.root { color:var(--cream); }
+  .harmonic-section h3 { font-size:.58rem; letter-spacing:.3em; color:var(--gold-dim); text-transform:uppercase; margin-bottom:.6rem; }
+  .harmonic-pills { display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; }
+  .h-pill { border-radius:100px; padding:.28rem .8rem; font-size:.75rem; font-family:'DM Mono',monospace; display:flex; align-items:center; gap:.35rem; }
+  .h-pill.primary          { background:color-mix(in srgb,var(--gold) 16%,transparent); border:1px solid var(--gold-dim); color:var(--gold-light); cursor:default; }
+  .h-pill.primary.inactive { background:var(--surface); border-color:var(--fret-line); color:var(--muted); cursor:pointer; }
+  .h-pill.primary.inactive:hover { border-color:var(--gold-dim); color:var(--gold); }
+  .h-pill.alt              { background:var(--surface); border:1px solid var(--fret-line); color:var(--muted); cursor:pointer; }
+  .h-pill.alt:hover        { background:color-mix(in srgb,#4a8cb8 18%,transparent); border-color:#2e6a8a; color:#7ec8e3; }
+  .h-pill.alt.active-pill  { background:color-mix(in srgb,#4a8cb8 22%,transparent); border:1px solid #4a9cc8; color:#7ec8e3; cursor:default; }
+  .h-pill .pill-label { font-size:.6rem; opacity:.55; }
+  .variations-section h3 { font-size:.58rem; letter-spacing:.3em; color:var(--gold-dim); text-transform:uppercase; margin-bottom:.6rem; }
+  .var-btns { display:flex; flex-wrap:wrap; gap:.4rem; }
+  .var-btn { background:var(--surface); border:1px solid var(--fret-line); border-radius:var(--radius); padding:.35rem .75rem; font-family:'DM Mono',monospace; font-size:.7rem; color:var(--muted); cursor:pointer; transition:all .12s; }
+  .var-btn:hover,.var-btn.active { background:color-mix(in srgb,var(--gold) 10%,var(--surface)); border-color:var(--gold-dim); color:var(--gold); }
+  .no-chord { color:var(--muted); font-size:.85rem; padding:3rem 0; text-align:center; }
+  @media(max-width:600px) {
+    /* Header smaller */
+    header { padding:1.2rem 1rem 1rem; }
+    h1 { font-size:1.6rem; }
+    .tuning-badge { font-size:.6rem; margin-top:.5rem; }
+
+    /* Root buttons — 6 per row */
+    .top-bar { padding:.75rem 1rem; }
+    .btn-grid-root { display:grid; grid-template-columns:repeat(6,1fr); gap:.25rem; }
+    .sel-btn { font-size:.72rem; padding:.35rem .2rem; }
+
+    /* Layout: stack vertically, no sidebar */
+    .app-layout { grid-template-columns:1fr; }
+    .sidebar {
+      position:static; height:auto;
+      border-right:none; border-bottom:1px solid var(--fret-line);
+      padding:.75rem 1rem;
+      flex-direction:row;
+      align-items:flex-start;
+      gap:.5rem;
+    }
+    .btn-group-label { display:none; }
+    .btn-grid-type {
+      flex-direction:row;
+      flex-wrap:wrap;
+      gap:.25rem;
+    }
+    .sel-btn.type-btn { font-size:.72rem; padding:.32rem .55rem; }
+    .type-divider { display:none; }
+
+    /* Main content tighter */
+    .main-content { padding:1rem .75rem 3rem; gap:1rem; }
+
+    /* Chord header smaller */
+    .chord-name-display { font-size:2rem; }
+    .chord-quality-display { font-size:.6rem; }
+    .shape-label { font-size:.55rem; }
+
+    /* Info row stacked */
+    .info-row { grid-template-columns:1fr; gap:.8rem; }
+
+    /* Positions wrap tighter */
+    .var-btn { font-size:.65rem; padding:.3rem .6rem; }
+
+    /* Harmonic pills smaller */
+    .h-pill { font-size:.7rem; padding:.25rem .65rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-tag">Tenor Guitar · GDAD</div>
+  <h1>Chord <span>Finder</span></h1>
+  <div class="tuning-badge">G · D · A · D</div>
+</header>
+
+<!-- Root buttons top bar -->
+<div class="top-bar">
+  <div class="btn-group-label">Root</div>
+  <div class="btn-grid-root" id="rootBtns"></div>
+</div>
+
+<div class="app-layout">
+  <!-- Sidebar: chord types -->
+  <aside class="sidebar">
+    <div class="btn-group-label">Chord type</div>
+    <div class="btn-grid-type" id="typeBtns"></div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main-content">
+    <div id="chordDisplayArea">
+      <div class="no-chord">← Select a root and chord type</div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// MUSIC THEORY
+// ═══════════════════════════════════════════════════════
+const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+function noteIdx(n) {
+  return NOTES.indexOf(
+    n.replace('Db','C#').replace('Eb','D#').replace('Gb','F#')
+     .replace('Ab','G#').replace('Bb','A#')
+  );
+}
+function noteAt(root, semi) {
+  return NOTES[(noteIdx(root) + semi + 120) % 12];
+}
+
+// GDAD tuning — open string pitches in semitones from C
+// G2=7, D3=14 (mod12=2), A2=9, D3=14 (mod12=2)
+// We keep the absolute semitone values so we can compute correct frequencies.
+// For note-name purposes we use mod 12.
+const TUNING     = ['G','D','A','D'];   // string names low→high
+const OPEN_ST    = [7, 2, 9, 2];        // semitones from C, mod 12
+
+function strNote(s, fret) {
+  // Returns note NAME (pitch class) for string s at fret
+  return NOTES[(OPEN_ST[s] + fret) % 12];
+}
+
+// ═══════════════════════════════════════════════════════
+// CHORD TYPE DEFINITIONS
+// intervals = semitones from root that must appear in the chord
+// ═══════════════════════════════════════════════════════
+const ROOT_NOTES   = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const ROOT_DISPLAY = ['C','C# / Db','D','D# / Eb','E','F','F# / Gb','G','G# / Ab','A','A# / Bb','B'];
+
+const CHORD_TYPES = {
+  'Major':   { intervals:[0,4,7],    symbol:''     },
+  'Minor':   { intervals:[0,3,7],    symbol:'m'    },
+  'Dom 7':   { intervals:[0,4,7,10], symbol:'7'    },
+  'Major 7': { intervals:[0,4,7,11], symbol:'maj7' },
+  'Major 6': { intervals:[0,4,7,9],  symbol:'6'    },
+  'Minor 6': { intervals:[0,3,7,9],  symbol:'m6'   },
+  'Minor 7': { intervals:[0,3,7,10], symbol:'m7'   },
+  // m7b5: played as rootless voicing = minor triad a minor 3rd above the root
+  // e.g. Dm7b5 → play Fm (F Ab C) — the D root is implied
+  'm7b5':    { intervals:[0,3,6,10], symbol:'m7b5', rootlessOffset:3 },
+};
+
+// ═══════════════════════════════════════════════════════
+// VERIFIED MOVEABLE SHAPES
+//
+// Derived from user-provided examples on GDAD tenor guitar.
+// All shapes use all 4 strings.
+//
+// offsets[s] = fret offset for string s relative to baseFret
+//   s=0 → G string (lowest/thickest)
+//   s=1 → D string
+//   s=2 → A string
+//   s=3 → D string (highest/thinnest)
+//
+// rootString: which string plays the root note
+//
+// Placement: baseFret is solved so that
+//   (OPEN_ST[rootString] + baseFret + offsets[rootString]) % 12 === target root
+//
+// VERIFICATION of source examples:
+//
+// G majeur 0020:
+//   s0: G+0=G, s1: D+0=D, s2: A+2=B, s3: D+0=D  → G D B D = G maj ✓
+//   offsets=[0,0,2,0], rootString=0 (G snaar), baseFret=0
+//   Shape: rootOffset on s0 = 0, so baseFret = (G - G - 0) = 0 ✓
+//
+// G majeur 0025:
+//   s0: G+0=G, s1: D+0=D, s2: A+2=B, s3: D+5=G  → G D B G = G maj ✓
+//   offsets=[0,0,2,5], rootString=0, baseFret=0
+//
+// Dm 7787:
+//   s0: G+7=D, s1: D+7=A, s2: A+8=F, s3: D+7=A  → D A F A = D min ✓
+//   offsets=[0,0,1,0], rootString=0, baseFret=7
+//   (baseFret=7 because G+7=D, and offset on s0=0)
+//
+// C7 5875:
+//   s0: G+5=C, s1: D+8=Bb, s2: A+7=E, s3: D+5=G → C Bb E G = C7 ✓
+//   offsets=[0,3,2,0], rootString=0, baseFret=5
+//
+// C7 5578:
+//   s0: G+5=C, s1: D+5=G, s2: A+7=E, s3: D+8=Bb → C G E Bb = C7 ✓
+//   offsets=[0,0,2,3], rootString=0, baseFret=5
+//
+// Cmaj7 5975:
+//   s0: G+5=C, s1: D+9=B, s2: A+7=E, s3: D+5=G  → C B E G = Cmaj7 ✓
+//   offsets=[0,4,2,0], rootString=0, baseFret=5
+//
+// Cmaj7 5579:
+//   s0: G+5=C, s1: D+5=G, s2: A+7=E, s3: D+9=B  → C G E B = Cmaj7 ✓
+//   offsets=[0,0,2,4], rootString=0, baseFret=5
+//
+// C6 5775:
+//   s0: G+5=C, s1: D+7=A, s2: A+7=E, s3: D+5=G → C A E G = C6 (C E G A) ✓
+//   offsets=[0,2,2,0], rootString=0, baseFret=5
+//
+// C6 5577:
+//   s0: G+5=C, s1: D+5=G, s2: A+7=E, s3: D+7=A → C G E A = C6 ✓
+//   offsets=[0,0,2,2], rootString=0, baseFret=5
+//
+// Cm6 5665:
+//   s0: G+5=C, s1: D+6=Ab, s2: A+6=Eb, s3: D+5=G → C Ab Eb G = Cm6 (C Eb G Ab) ✓
+//   offsets=[0,1,1,0], rootString=0, baseFret=5
+//
+// Cm7 5865:
+//   s0: G+5=C, s1: D+8=Bb, s2: A+6=Eb, s3: D+5=G → C Bb Eb G = Cm7 (C Eb G Bb) ✓
+//   offsets=[0,3,1,0], rootString=0, baseFret=5
+//
+// Cm7 5568:
+//   s0: G+5=C, s1: D+5=G, s2: A+6=Eb, s3: D+8=Bb → C G Eb Bb = Cm7 ✓
+//   offsets=[0,0,1,3], rootString=0, baseFret=5
+//
+// ═══════════════════════════════════════════════════════
+
+// C7 rootless 0210:
+//   s0: G+0=G, s1: D+2=E, s2: A+1=Bb, s3: D+0=D → G E Bb D
+//   G = kwint van C (C+7=G), dus rootString=0, rootFretOffset=7
+//   baseFret = (target - OPEN_ST[0] - 7 + 120) % 12
+//   Voor C: (0 - 7 - 7 + 120) % 12 = 0 ✓
+//   Voor F: (5 - 7 - 7 + 120) % 12 = 5 ✓
+//   Voor A: (9 - 7 - 7 + 120) % 12 = 9 ✓
+
+const SHAPES = {
+  'Major': [
+    { offsets:[0,0,2,0], rootString:0, name:'Close voicing' },
+    { offsets:[0,0,2,5], rootString:0, name:'Drop 2'        },
+  ],
+  'Minor': [
+    { offsets:[0,0,1,0], rootString:0, name:'Close voicing' },
+  ],
+  // m7b5: rootless voicing = minor triad a minor 3rd above the root
+  // Dm7b5 → play Fm (F Ab C) at baseFret for F
+  // Use same minor shape but anchor on minor 3rd (+3) of the root
+  'm7b5': [
+    { offsets:[0,0,1,0], rootString:0, rootFretOffset:3, name:'Rootless (♭3 triad)' },
+  ],
+  'Dom 7': [
+    { offsets:[0,3,2,0], rootString:0, name:'Drop 3'        },
+    { offsets:[0,0,2,3], rootString:0, name:'Drop 2'        },
+  ],
+  'Dom 7 rootless': [
+    // G-snaar speelt de kwint (+7) van de root
+    { offsets:[0,2,1,0], rootString:0, rootFretOffset:7, name:'Rootless (9)' },
+  ],
+  'Major 7': [
+    { offsets:[0,4,2,0], rootString:0, name:'Drop 3'        },
+    { offsets:[0,0,2,4], rootString:0, name:'Drop 2'        },
+  ],
+  'Major 6': [
+    { offsets:[0,2,2,0], rootString:0, name:'Close voicing' },
+    { offsets:[0,0,2,2], rootString:0, name:'Drop 2'        },
+  ],
+  'Minor 6': [
+    { offsets:[0,1,1,0], rootString:0, name:'Close voicing' },
+  ],
+  'Minor 7': [
+    { offsets:[0,3,1,0], rootString:0, name:'Drop 3'        },
+    { offsets:[0,0,1,3], rootString:0, name:'Drop 2'        },
+  ],
+};
+
+// ═══════════════════════════════════════════════════════
+// PLACEMENT ENGINE
+// ═══════════════════════════════════════════════════════
+function placeShape(shape, targetRoot) {
+  const target   = noteIdx(targetRoot);
+  const rs       = shape.rootString;
+  const rootOff  = shape.offsets[rs];
+
+  // If rootFretOffset is set, the rootString plays (target + rootFretOffset) semitones
+  // e.g. rootFretOffset=7 means rootString plays the 5th of the target root
+  // Solve: (OPEN_ST[rs] + baseFret + rootOff) % 12 === (target + intervalOffset) % 12
+  const intervalOffset = (shape.rootFretOffset !== undefined) ? shape.rootFretOffset : 0;
+  const targetNote = (target + intervalOffset) % 12;
+  const baseFret = (targetNote - OPEN_ST[rs] - rootOff + 120) % 12;
+
+  const results = [];
+  for (const bf of [baseFret, baseFret + 12]) {
+    const frets = shape.offsets.map(off => bf + off);
+    if (frets.some(f => f < 0 || f > 14)) continue;
+    const notes = frets.map((f, i) => strNote(i, f));
+    results.push({ frets, notes, baseFret: bf, shapeName: shape.name });
+  }
+  return results;
+}
+
+function findVoicings(root, typeName) {
+  const shapes = SHAPES[typeName] || [];
+  const seen   = new Set();
+  const out    = [];
+
+  for (const shape of shapes) {
+    for (const v of placeShape(shape, root)) {
+      const key = v.frets.join('-');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(v);
+    }
+  }
+
+  out.sort((a, b) => a.baseFret - b.baseFret);
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════
+// SVG FRETBOARD RENDERER
+// Nut = LEFT. G string (s=0, thickest) = BOTTOM. D (s=3) = TOP.
+// ═══════════════════════════════════════════════════════
+function renderDiagram(frets, root, voicing) {
+  const NF = 14, NS = 4;
+  const FW = 40, SH = 40;
+  const LP = 36, TP = 24, RP = 30, BP = 6;
+  const W = LP + NF * FW + RP;
+  const H = TP + (NS - 1) * SH + BP;
+
+  const fX = f => LP + f * FW;
+  // s=0 (G) at bottom = highest Y; s=3 (D) at top = lowest Y
+  const sY = s => TP + (NS - 1 - s) * SH;
+
+  const rootNote = NOTES[noteIdx(root)];
+
+  // Colors & widths: s=0 (G, bottom, thick) → s=3 (D, top, thin)
+  const SC = ['#c9a84c','#a87c3a','#8b6428','#6e4c1e'];
+  const SW = [3.2, 2.4, 1.8, 1.2];
+
+  let g = `<svg class="fretboard" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+
+  // Neck background
+  g += `<rect x="${LP}" y="${TP-2}" width="${NF*FW}" height="${(NS-1)*SH+4}" rx="3" fill="#100d09"/>`;
+
+  // Fret numbers above top string
+  for (const n of [1,2,3,4,5,6,7,8,9,10,11,12,13,14]) {
+    const col = [3,5,7,9,12].includes(n) ? '#c9a84c' : '#8a8070';
+    g += `<text x="${fX(n)-FW/2}" y="${TP-9}" text-anchor="middle" fill="${col}" font-family="DM Mono" font-size="9">${n}</text>`;
+  }
+
+  // Nut
+  g += `<line x1="${fX(0)}" y1="${sY(NS-1)-6}" x2="${fX(0)}" y2="${sY(0)+6}" stroke="#c9a84c" stroke-width="5" stroke-linecap="round"/>`;
+
+  // Fret lines
+  for (let f = 1; f <= NF; f++) {
+    const col = [3,5,7,9,12].includes(f) ? '#4a3e2c' : '#3d3428';
+    g += `<line x1="${fX(f)}" y1="${sY(NS-1)-4}" x2="${fX(f)}" y2="${sY(0)+4}" stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>`;
+  }
+
+  // Position markers centred between all strings
+  const my = (sY(0) + sY(NS-1)) / 2;
+  for (const mp of [3,5,7,9,12]) {
+    const mx = fX(mp) - FW/2;
+    if (mp === 12) {
+      g += `<circle cx="${mx}" cy="${my-10}" r="4.5" fill="#1e1810"/>`;
+      g += `<circle cx="${mx}" cy="${my+10}" r="4.5" fill="#1e1810"/>`;
+    } else {
+      g += `<circle cx="${mx}" cy="${my}" r="4.5" fill="#1e1810"/>`;
+    }
+  }
+
+  // String lines (G bottom → D top)
+  for (let s = 0; s < NS; s++) {
+    const y = sY(s);
+    g += `<line x1="${fX(0)}" y1="${y}" x2="${fX(NF)}" y2="${y}" stroke="${SC[s]}" stroke-width="${SW[s]}" opacity="0.9"/>`;
+  }
+
+  // String labels right side
+  for (let s = 0; s < NS; s++) {
+    g += `<text x="${fX(NF)+10}" y="${sY(s)+4}" text-anchor="start" fill="${SC[s]}" font-family="DM Mono" font-size="10" font-weight="500">${TUNING[s]}</text>`;
+  }
+
+  // Clickable background rect (arpeggio on click)
+  g += `<rect x="${LP}" y="${TP-2}" width="${NF*FW}" height="${(NS-1)*SH+4}" rx="3" fill="transparent" style="cursor:pointer"/>`;
+
+  // Finger dots & open circles
+  for (let s = 0; s < NS; s++) {
+    const y  = sY(s);
+    const f  = frets[s];
+    const n  = strNote(s, f);
+    const ir = (n === rootNote);
+
+    if (f === 0) {
+      const cx = LP - 17;
+      g += `<circle cx="${cx}" cy="${y}" r="10" fill="none" stroke="${ir?'#c9a84c':'#4a7c59'}" stroke-width="2" data-string="${s}" style="cursor:pointer"/>`;
+      if (ir) g += `<circle cx="${cx}" cy="${y}" r="5" fill="#c9a84c" data-string="${s}" style="cursor:pointer"/>`;
+      g += `<text x="${cx}" y="${y+3.5}" text-anchor="middle" font-family="DM Mono" font-size="7" font-weight="600" fill="${ir?'#0e0c0a':'#4a7c59'}" style="pointer-events:none">${n}</text>`;
+    } else {
+      const dx = fX(f) - FW/2;
+      g += `<circle cx="${dx}" cy="${y}" r="14" fill="${ir?'#c9a84c':'#d5ccb8'}" data-string="${s}" style="cursor:pointer"/>`;
+      g += `<text x="${dx}" y="${y+4}" text-anchor="middle" font-family="DM Mono" font-size="9" font-weight="700" fill="#0e0c0a" style="pointer-events:none">${n}</text>`;
+      g += `<text x="${dx}" y="${y+15.5}" text-anchor="middle" font-family="DM Mono" font-size="7" fill="${ir?'#7a5320':'#777'}" style="pointer-events:none">${f}</text>`;
+    }
+  }
+
+  g += `</svg>`;
+  return g;
+}
+
+// ═══════════════════════════════════════════════════════
+// AUDIO — Harpsichord synthesis
+// Sharp attack, bright tone, short decay — no sustain
+// ═══════════════════════════════════════════════════════
+let audioCtx = null;
+function getCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+const OPEN_FREQ = [98.00, 146.83, 220.00, 293.66];
+function fretFreq(s, fret) { return OPEN_FREQ[s] * Math.pow(2, fret / 12); }
+
+function playHarpNote(ctx, freq, startTime) {
+  const decay = 1.2 + (1 / freq) * 80; // lower notes decay slower
+
+  // Mix of harmonics for bright plucked character
+  const harmonics = [1, 2, 3, 4, 6];
+  const gains     = [1.0, 0.5, 0.25, 0.12, 0.06];
+
+  harmonics.forEach((h, i) => {
+    const osc  = ctx.createOscillator();
+    osc.type   = 'sine';
+    osc.frequency.value = freq * h;
+
+    // Slight detune on upper harmonics for warmth
+    if (h > 1) osc.detune.value = (Math.random() - 0.5) * 4;
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(gains[i] * 0.28, startTime + 0.004);
+    gain.gain.exponentialRampToValueAtTime(gains[i] * 0.08, startTime + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay * (1 - i * 0.12));
+
+    // Bright filter — harpsichord is quite open
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = freq * 0.8;
+    hp.Q.value = 0.5;
+
+    osc.connect(hp);
+    hp.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(startTime);
+    osc.stop(startTime + decay + 0.1);
+  });
+
+  // Noise burst for the pluck click
+  const bufSize = Math.round(ctx.sampleRate * 0.012);
+  const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const nd = noiseBuf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) nd[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuf;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.06, startTime);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.012);
+  noise.connect(noiseGain);
+  noiseGain.connect(ctx.destination);
+  noise.start(startTime);
+  noise.stop(startTime + 0.015);
+}
+
+let playing = false;
+
+async function playNote(strIdx, fret) {
+  const ctx = getCtx();
+  if (ctx.state === 'suspended') await ctx.resume();
+  playHarpNote(ctx, fretFreq(strIdx, fret), ctx.currentTime + 0.02);
+}
+
+async function playArpeggio(frets) {
+  if (playing) return;
+  playing = true;
+  const ctx = getCtx();
+  if (ctx.state === 'suspended') await ctx.resume();
+  const now = ctx.currentTime + 0.05;
+  const gap = 0.22;
+  for (let s = 0; s < 4; s++) {
+    playHarpNote(ctx, fretFreq(s, frets[s]), now + s * gap);
+  }
+  setTimeout(() => { playing = false; }, (gap * 3 + 2.0) * 1000);
+}
+
+// ═══════════════════════════════════════════════════════
+// HARMONIC ALTERNATIVES
+// Dom 7 → rootless voicing (same shape, root omitted)
+// Minor → rootless m7b5 (minor triad = m7b5 without root,
+//         root is a minor 3rd below: X minor = (X-3)m7b5)
+// ═══════════════════════════════════════════════════════
+function findRootlessVoicing(root, typeName) {
+  if (typeName === 'Dom 7') {
+    const shapes = SHAPES['Dom 7 rootless'] || [];
+    const seen = new Set(), out = [];
+    for (const shape of shapes) {
+      for (const v of placeShape(shape, root)) {
+        const key = v.frets.join('-');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(v);
+      }
+    }
+    return out;
+  }
+  return [];
+}
+
+function getAltInterpretation(root, typeName) {
+  // Returns { label, pillText } or null
+  if (typeName === 'Dom 7') {
+    return null; // handled separately via rootless voicing
+  }
+  if (typeName === 'Minor') {
+    // Minor triad on X = rootless m7b5 on (X - minor3rd = X - 3 semitones)
+    const altRoot = NOTES[(noteIdx(root) - 3 + 12) % 12];
+    return { altRoot, label: `${altRoot}m7b5`, pillLabel: 'rootless m7b5' };
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════
+// UI
+// ═══════════════════════════════════════════════════════
+let currentRoot = 'G';
+let currentType = 'Major';
+let voicings = [], voicingIdx = 0;
+let originChord = null;
+
+function populate() {
+  const rootContainer = document.getElementById('rootBtns');
+  const typeContainer = document.getElementById('typeBtns');
+
+  ROOT_NOTES.forEach((n, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'sel-btn' + (n.includes('#') ? ' sharp' : '') + (n === currentRoot ? ' active' : '');
+    btn.textContent = ROOT_DISPLAY[i].split(' ')[0]; // just "C", "C#", etc.
+    btn.title = ROOT_DISPLAY[i];
+    btn.addEventListener('click', () => {
+      originChord = null;
+      currentRoot = n;
+      document.querySelectorAll('#rootBtns .sel-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      voicings   = findVoicings(currentRoot, currentType);
+      voicingIdx = 0;
+      render(currentRoot, currentType);
+    });
+    rootContainer.appendChild(btn);
+  });
+
+  const extendedTypes = ['m7b5'];
+
+  Object.keys(CHORD_TYPES).forEach(t => {
+    // Add divider before extended types
+    if (t === 'm7b5') {
+      const div = document.createElement('div');
+      div.className = 'type-divider';
+      div.textContent = 'extended';
+      typeContainer.appendChild(div);
+    }
+    const btn = document.createElement('button');
+    const isExtended = extendedTypes.includes(t);
+    btn.className = 'sel-btn type-btn' + (isExtended ? ' extended' : '') + (t === currentType ? ' active' : '');
+    btn.textContent = t;
+    btn.addEventListener('click', () => {
+      originChord = null;
+      currentType = t;
+      document.querySelectorAll('#typeBtns .sel-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      voicings   = findVoicings(currentRoot, currentType);
+      voicingIdx = 0;
+      render(currentRoot, currentType);
+    });
+    typeContainer.appendChild(btn);
+  });
+
+  voicings = findVoicings(currentRoot, currentType);
+  render(currentRoot, currentType);
+}
+
+function update() {
+  voicings   = findVoicings(currentRoot, currentType);
+  voicingIdx = 0;
+  render(currentRoot, currentType);
+}
+
+function setRootBtn(root) {
+  currentRoot = root;
+  document.querySelectorAll('#rootBtns .sel-btn').forEach((b, i) => {
+    b.classList.toggle('active', ROOT_NOTES[i] === root);
+  });
+}
+
+function setTypeBtn(typeName) {
+  currentType = typeName;
+  const keys = Object.keys(CHORD_TYPES);
+  document.querySelectorAll('#typeBtns .sel-btn').forEach((b, i) => {
+    b.classList.toggle('active', keys[i] === typeName);
+  });
+}
+
+function navigateTo(root, typeName) {
+  if (!originChord) {
+    originChord = { root: currentRoot, typeName: currentType };
+  }
+  currentRoot = root;
+  currentType = typeName;
+  setRootBtn(root);
+  setTypeBtn(typeName);
+  voicings   = findVoicings(root, typeName);
+  voicingIdx = 0;
+  render(root, typeName);
+}
+
+function navigateBack() {
+  if (!originChord) return;
+  const prev = originChord;
+  originChord = null;
+  currentRoot = prev.root;
+  currentType = prev.typeName;
+  setRootBtn(prev.root);
+  setTypeBtn(prev.typeName);
+  voicings   = findVoicings(prev.root, prev.typeName);
+  voicingIdx = 0;
+  render(prev.root, prev.typeName);
+}
+
+function render(root, typeName) {
+  const area = document.getElementById('chordDisplayArea');
+  const type = CHORD_TYPES[typeName];
+
+  if (!voicings.length) {
+    area.innerHTML = `<div class="no-chord">Geen akkoord gevonden</div>`;
+    return;
+  }
+
+  const v   = voicings[voicingIdx];
+  const sym = root + type.symbol;
+
+  const degN = {0:'root',2:'9',3:'♭3',4:'3',5:'4',6:'♭5',7:'5',8:'♯5',9:'6',10:'♭7',11:'7'};
+  const tones = type.intervals.map(i => ({
+    note: noteAt(root, i), deg: degN[i]||String(i), isRoot: i===0
+  }));
+
+  // Rootless voicings — Dom 7 only
+  const rootlessVoicings = findRootlessVoicing(root, typeName);
+  const hasRootless = rootlessVoicings.length > 0;
+
+  // Alt interpretation — Minor → m7b5
+  const altInterp = getAltInterpretation(root, typeName);
+
+  const svgMarkup = renderDiagram(v.frets, root, v);
+
+  let h = `<div class="chord-display">`;
+
+  // Header
+  h += `<div class="chord-header">
+    <div class="chord-name-display">${sym}</div>
+    <div class="chord-quality-display">${typeName}</div>
+    <div class="shape-label">${v.shapeName}</div>
+  </div>`;
+
+  // Fretboard
+  h += `<div class="fretboard-wrap" id="fbWrap"></div>`;
+
+  // Positions — directly under neck
+  if (voicings.length > 1) {
+    h += `<div class="variations-section"><h3>Positions — ${voicings.length} found</h3><div class="var-btns">`;
+    voicings.forEach((vv, i) => {
+      h += `<button class="var-btn${i===voicingIdx?' active':''}" onclick="pick(${i})" title="${vv.shapeName}">${vv.frets.join('-')}</button>`;
+    });
+    h += `</div></div>`;
+  }
+
+  // Harmonic function + chord tones side by side
+  h += `<div class="info-row">`;
+
+  // Harmonic function
+  h += `<div class="info-block"><div class="harmonic-section"><h3>Harmonic function</h3><div class="harmonic-pills">`;
+  if (hasRootless) {
+    const isOnRootless = originChord !== null;
+    const primSym = isOnRootless
+      ? (originChord.root + CHORD_TYPES[originChord.typeName].symbol)
+      : sym;
+    const rl = rootlessVoicings[0];
+    const rlFretsJson = JSON.stringify(rl.frets);
+    if (isOnRootless) {
+      h += `<span class="h-pill primary inactive" onclick="navigateBack()">${primSym} <span class="pill-label">primary</span></span>`;
+      h += `<span class="h-pill alt active-pill">${sym} rootless <span class="pill-label">${rl.shapeName}</span></span>`;
+    } else {
+      h += `<span class="h-pill primary">${primSym} <span class="pill-label">primary</span></span>`;
+      h += `<span class="h-pill alt" onclick="showRootless(${rlFretsJson},'${root}')">${sym} rootless <span class="pill-label">${rl.shapeName}</span></span>`;
+    }
+  } else if (altInterp) {
+    const isOnAlt = originChord !== null;
+    const primSym = isOnAlt
+      ? (originChord.root + CHORD_TYPES[originChord.typeName].symbol)
+      : sym;
+    if (isOnAlt) {
+      h += `<span class="h-pill primary inactive" onclick="navigateBack()">${primSym} <span class="pill-label">primary</span></span>`;
+      h += `<span class="h-pill alt active-pill">${altInterp.label} <span class="pill-label">${altInterp.pillLabel}</span></span>`;
+    } else {
+      h += `<span class="h-pill primary">${primSym} <span class="pill-label">primary</span></span>`;
+      h += `<span class="h-pill alt" onclick="navigateTo('${altInterp.altRoot}','Minor')" >${altInterp.label} <span class="pill-label">${altInterp.pillLabel}</span></span>`;
+    }
+  } else {
+    h += `<span class="h-pill primary">${sym} <span class="pill-label">primary</span></span>`;
+  }
+  h += `</div></div></div>`;
+
+  // Chord tones
+  h += `<div class="info-block"><h3>Chord tones</h3><div class="tone-pills">`;
+  tones.forEach(t => {
+    h += `<span class="tone-pill${t.isRoot?' root':''}">${t.note} <span style="opacity:.5;font-size:.7em">${t.deg}</span></span>`;
+  });
+  h += `</div></div>`;
+
+  h += `</div>`; // close info-row
+  h += `</div>`; // close chord-display
+  area.innerHTML = h;
+
+  // Inject SVG separately to avoid innerHTML parsing issues with data-* attributes
+  const fbWrap = document.getElementById('fbWrap');
+  fbWrap.innerHTML = svgMarkup;
+
+  // Attach click handlers AFTER SVG is in the DOM
+  attachFretboardClicks(v.frets);
+}
+
+function attachFretboardClicks(frets) {
+  const wrap = document.getElementById('fbWrap');
+  if (!wrap) return;
+  const svg = wrap.querySelector('svg');
+  if (!svg) return;
+
+  // Clicks on dots (circles with data-string attr) → single note
+  svg.querySelectorAll('[data-string]').forEach(el => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const s = parseInt(el.getAttribute('data-string'));
+      playNote(s, frets[s]);
+      // Flash the dot
+      const origFill = el.getAttribute('fill');
+      el.setAttribute('fill', '#e8c96a');
+      setTimeout(() => el.setAttribute('fill', origFill), 180);
+    });
+  });
+
+  // Click on SVG background (not a dot) → arpeggio
+  svg.addEventListener('click', () => {
+    playArpeggio(frets);
+  });
+}
+
+function showRootless(frets, root) {
+  // Save current state so primary pill can navigate back
+  if (!originChord) {
+    originChord = { root: currentRoot, typeName: currentType };
+  }
+  // Render the rootless voicing directly on the neck
+  // We temporarily override the displayed voicing
+  const area = document.getElementById('chordDisplayArea');
+  const type = CHORD_TYPES['Dom 7'];
+  const sym  = root + type.symbol;
+  const rl   = { frets, notes: frets.map((f,s) => strNote(s,f)), shapeName: 'Rootless (9)' };
+
+  // Rebuild display with rootless frets
+  const svgMarkup = renderDiagram(frets, root, rl);
+
+  const degN = {0:'root',2:'9',3:'♭3',4:'3',5:'4',6:'♭5',7:'5',8:'♯5',9:'6',10:'♭7',11:'7'};
+  const tones = type.intervals.map(i => ({
+    note: noteAt(root, i), deg: degN[i]||String(i), isRoot: i===0
+  }));
+
+  const primSym = originChord.root + CHORD_TYPES[originChord.typeName].symbol;
+  const rlFretsJson = JSON.stringify(frets);
+
+  let h = `<div class="chord-display">`;
+  h += `<div class="chord-header">
+    <div class="chord-name-display">${sym}</div>
+    <div class="chord-quality-display">Dom 7</div>
+    <div class="shape-label">Rootless (9)</div>
+  </div>`;
+  h += `<div class="fretboard-wrap" id="fbWrap"></div>`;
+
+  // Positions — always show
+  const allRootless = findRootlessVoicing(root, 'Dom 7');
+  h += `<div class="variations-section"><h3>Positions — ${allRootless.length} found</h3><div class="var-btns">`;
+  allRootless.forEach(vv => {
+    const isActive = vv.frets.join('-') === frets.join('-');
+    h += `<button class="var-btn${isActive?' active':''}" onclick="showRootless(${JSON.stringify(vv.frets)},'${root}')" title="${vv.shapeName}">${vv.frets.join('-')}</button>`;
+  });
+  h += `</div></div>`;
+
+  // Info row: harmonic function + chord tones side by side
+  h += `<div class="info-row">`;
+  h += `<div class="info-block"><div class="harmonic-section"><h3>Harmonic function</h3><div class="harmonic-pills">`;
+  h += `<span class="h-pill primary inactive" onclick="navigateBack()">${primSym} <span class="pill-label">primary</span></span>`;
+  h += `<span class="h-pill alt active-pill">${sym} rootless <span class="pill-label">Rootless (9)</span></span>`;
+  h += `</div></div></div>`;
+  h += `<div class="info-block"><h3>Chord tones</h3><div class="tone-pills">`;
+  tones.forEach(t => {
+    h += `<span class="tone-pill${t.isRoot?' root':''}">${t.note} <span style="opacity:.5;font-size:.7em">${t.deg}</span></span>`;
+  });
+  h += `</div></div>`;
+  h += `</div>`; // close info-row
+  h += `</div>`; // close chord-display
+
+  area.innerHTML = h;
+  document.getElementById('fbWrap').innerHTML = svgMarkup;
+  attachFretboardClicks(frets);
+}
+
+function pick(idx) {
+  voicingIdx = idx;
+  render(currentRoot, currentType);
+}
+
+populate();
+</script>
+</body>
+</html>
