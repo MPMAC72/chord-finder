@@ -10,16 +10,16 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0e0c0a;
-    --surface: #1a1712;
-    --surface2: #252118;
-    --gold: #c9a84c;
-    --gold-light: #e8c96a;
-    --gold-dim: #7a6230;
-    --cream: #f0e8d8;
-    --muted: #6b5f4a;
-    --fret-line: #3d3428;
-    --open: #4a7c59;
+    --bg: #1a1510;
+    --surface: #262016;
+    --surface2: #32291a;
+    --gold: #e8c46a;
+    --gold-light: #f5d98a;
+    --gold-dim: #a07a3a;
+    --cream: #f5efe2;
+    --muted: #9a8a6a;
+    --fret-line: #4a3c28;
+    --open: #5a9a6a;
     --radius: 4px;
     --sidebar-w: 148px;
   }
@@ -81,15 +81,15 @@
   .sel-btn {
     background:var(--surface); border:1px solid var(--fret-line); border-radius:var(--radius);
     padding:.38rem .5rem; font-family:'DM Mono',monospace; font-size:.8rem;
-    color:var(--muted); cursor:pointer; transition:all .12s;
-    text-align:center; white-space:nowrap;
+    color:var(--cream); cursor:pointer; transition:all .12s;
+    text-align:center; white-space:nowrap; opacity:.7;
   }
-  .sel-btn:hover { border-color:var(--gold-dim); color:var(--cream); }
+  .sel-btn:hover { border-color:var(--gold-dim); color:var(--cream); opacity:1; }
   .sel-btn.active {
-    background:color-mix(in srgb,var(--gold) 15%,var(--surface));
-    border-color:var(--gold); color:var(--gold-light);
+    background:color-mix(in srgb,var(--gold) 20%,var(--surface));
+    border-color:var(--gold); color:var(--gold-light); opacity:1;
   }
-  .sel-btn.sharp { color:#777; font-size:.72rem; }
+  .sel-btn.sharp { font-size:.72rem; }
   .sel-btn.sharp.active { color:var(--gold-light); }
   .sel-btn.type-btn { text-align:left; padding:.38rem .6rem; font-size:.76rem; }
   .sel-btn.extended { color:#5a7a8a; }
@@ -207,6 +207,7 @@
 <div class="top-bar">
   <div class="btn-group-label">Root</div>
   <div class="btn-grid-root" id="rootBtns"></div>
+  <div id="harmonicBar" style="margin-top:.6rem;min-height:1.6rem;"></div>
 </div>
 
 <div class="app-layout">
@@ -590,17 +591,23 @@ function playHarpNote(ctx, freq, startTime) {
 
 let playing = false;
 
+async function ensureAudio() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  return audioCtx;
+}
+
 async function playNote(strIdx, fret) {
-  const ctx = getCtx();
-  if (ctx.state === 'suspended') await ctx.resume();
+  const ctx = await ensureAudio();
   playHarpNote(ctx, fretFreq(strIdx, fret), ctx.currentTime + 0.02);
 }
 
 async function playArpeggio(frets) {
   if (playing) return;
   playing = true;
-  const ctx = getCtx();
-  if (ctx.state === 'suspended') await ctx.resume();
+  const ctx = await ensureAudio();
   const now = ctx.currentTime + 0.05;
   const gap = 0.22;
   for (let s = 0; s < 4; s++) {
@@ -748,6 +755,8 @@ function navigateBack() {
   setTypeBtn(prev.typeName);
   voicings   = findVoicings(prev.root, prev.typeName);
   voicingIdx = 0;
+  const bar = document.getElementById('harmonicBar');
+  if (bar) bar.innerHTML = '';
   render(prev.root, prev.typeName);
 }
 
@@ -798,16 +807,28 @@ function render(root, typeName) {
     h += `</div></div>`;
   }
 
-  // Harmonic function + chord tones side by side
-  h += `<div class="info-row">`;
+  h += `</div>`; // close chord-display
+  area.innerHTML = h;
 
-  // Harmonic function
-  h += `<div class="info-block"><div class="harmonic-section"><h3>Harmonic function</h3><div class="harmonic-pills">`;
+  // Inject SVG
+  const fbWrap = document.getElementById('fbWrap');
+  fbWrap.innerHTML = svgMarkup;
+  attachFretboardClicks(v.frets);
+
+  // Auto-scroll fretboard to show finger positions
+  scrollFretboard(v.frets);
+
+  // Render harmonic pills in top bar
+  renderHarmonicBar(root, typeName, sym, hasRootless, rootlessVoicings, altInterp);
+}
+
+function renderHarmonicBar(root, typeName, sym, hasRootless, rootlessVoicings, altInterp) {
+  const bar = document.getElementById('harmonicBar');
+  if (!bar) return;
+  let h = `<div class="harmonic-pills">`;
   if (hasRootless) {
     const isOnRootless = originChord !== null;
-    const primSym = isOnRootless
-      ? (originChord.root + CHORD_TYPES[originChord.typeName].symbol)
-      : sym;
+    const primSym = isOnRootless ? (originChord.root + CHORD_TYPES[originChord.typeName].symbol) : sym;
     const rl = rootlessVoicings[0];
     const rlFretsJson = JSON.stringify(rl.frets);
     if (isOnRootless) {
@@ -819,38 +840,31 @@ function render(root, typeName) {
     }
   } else if (altInterp) {
     const isOnAlt = originChord !== null;
-    const primSym = isOnAlt
-      ? (originChord.root + CHORD_TYPES[originChord.typeName].symbol)
-      : sym;
+    const primSym = isOnAlt ? (originChord.root + CHORD_TYPES[originChord.typeName].symbol) : sym;
     if (isOnAlt) {
       h += `<span class="h-pill primary inactive" onclick="navigateBack()">${primSym} <span class="pill-label">primary</span></span>`;
       h += `<span class="h-pill alt active-pill">${altInterp.label} <span class="pill-label">${altInterp.pillLabel}</span></span>`;
     } else {
       h += `<span class="h-pill primary">${primSym} <span class="pill-label">primary</span></span>`;
-      h += `<span class="h-pill alt" onclick="navigateTo('${altInterp.altRoot}','Minor')" >${altInterp.label} <span class="pill-label">${altInterp.pillLabel}</span></span>`;
+      h += `<span class="h-pill alt" onclick="navigateTo('${altInterp.altRoot}','Minor')">${altInterp.label} <span class="pill-label">${altInterp.pillLabel}</span></span>`;
     }
-  } else {
-    h += `<span class="h-pill primary">${sym} <span class="pill-label">primary</span></span>`;
   }
-  h += `</div></div></div>`;
+  h += `</div>`;
+  bar.innerHTML = h;
+}
 
-  // Chord tones
-  h += `<div class="info-block"><h3>Chord tones</h3><div class="tone-pills">`;
-  tones.forEach(t => {
-    h += `<span class="tone-pill${t.isRoot?' root':''}">${t.note} <span style="opacity:.5;font-size:.7em">${t.deg}</span></span>`;
-  });
-  h += `</div></div>`;
-
-  h += `</div>`; // close info-row
-  h += `</div>`; // close chord-display
-  area.innerHTML = h;
-
-  // Inject SVG separately to avoid innerHTML parsing issues with data-* attributes
-  const fbWrap = document.getElementById('fbWrap');
-  fbWrap.innerHTML = svgMarkup;
-
-  // Attach click handlers AFTER SVG is in the DOM
-  attachFretboardClicks(v.frets);
+function scrollFretboard(frets) {
+  const wrap = document.getElementById('fbWrap');
+  if (!wrap) return;
+  const maxFret = Math.max(...frets);
+  if (maxFret <= 5) {
+    wrap.scrollTo({ left: 0, behavior: 'smooth' });
+    return;
+  }
+  // Each fret is FW=40px wide, LP=36px left padding
+  const FW = 40, LP = 36;
+  const targetX = LP + (maxFret - 4) * FW;
+  wrap.scrollTo({ left: Math.max(0, targetX - wrap.clientWidth * 0.3), behavior: 'smooth' });
 }
 
 function attachFretboardClicks(frets) {
@@ -880,27 +894,15 @@ function attachFretboardClicks(frets) {
 }
 
 function showRootless(frets, root) {
-  // Save current state so primary pill can navigate back
   if (!originChord) {
     originChord = { root: currentRoot, typeName: currentType };
   }
-  // Render the rootless voicing directly on the neck
-  // We temporarily override the displayed voicing
   const area = document.getElementById('chordDisplayArea');
   const type = CHORD_TYPES['Dom 7'];
   const sym  = root + type.symbol;
   const rl   = { frets, notes: frets.map((f,s) => strNote(s,f)), shapeName: 'Rootless (9)' };
-
-  // Rebuild display with rootless frets
   const svgMarkup = renderDiagram(frets, root, rl);
-
-  const degN = {0:'root',2:'9',3:'♭3',4:'3',5:'4',6:'♭5',7:'5',8:'♯5',9:'6',10:'♭7',11:'7'};
-  const tones = type.intervals.map(i => ({
-    note: noteAt(root, i), deg: degN[i]||String(i), isRoot: i===0
-  }));
-
   const primSym = originChord.root + CHORD_TYPES[originChord.typeName].symbol;
-  const rlFretsJson = JSON.stringify(frets);
 
   let h = `<div class="chord-display">`;
   h += `<div class="chord-header">
@@ -910,7 +912,6 @@ function showRootless(frets, root) {
   </div>`;
   h += `<div class="fretboard-wrap" id="fbWrap"></div>`;
 
-  // Positions — always show
   const allRootless = findRootlessVoicing(root, 'Dom 7');
   h += `<div class="variations-section"><h3>Positions — ${allRootless.length} found</h3><div class="var-btns">`;
   allRootless.forEach(vv => {
@@ -918,24 +919,21 @@ function showRootless(frets, root) {
     h += `<button class="var-btn${isActive?' active':''}" onclick="showRootless(${JSON.stringify(vv.frets)},'${root}')" title="${vv.shapeName}">${vv.frets.join('-')}</button>`;
   });
   h += `</div></div>`;
-
-  // Info row: harmonic function + chord tones side by side
-  h += `<div class="info-row">`;
-  h += `<div class="info-block"><div class="harmonic-section"><h3>Harmonic function</h3><div class="harmonic-pills">`;
-  h += `<span class="h-pill primary inactive" onclick="navigateBack()">${primSym} <span class="pill-label">primary</span></span>`;
-  h += `<span class="h-pill alt active-pill">${sym} rootless <span class="pill-label">Rootless (9)</span></span>`;
-  h += `</div></div></div>`;
-  h += `<div class="info-block"><h3>Chord tones</h3><div class="tone-pills">`;
-  tones.forEach(t => {
-    h += `<span class="tone-pill${t.isRoot?' root':''}">${t.note} <span style="opacity:.5;font-size:.7em">${t.deg}</span></span>`;
-  });
-  h += `</div></div>`;
-  h += `</div>`; // close info-row
   h += `</div>`; // close chord-display
 
   area.innerHTML = h;
   document.getElementById('fbWrap').innerHTML = svgMarkup;
   attachFretboardClicks(frets);
+  scrollFretboard(frets);
+
+  // Update harmonic bar
+  const bar = document.getElementById('harmonicBar');
+  if (bar) {
+    bar.innerHTML = `<div class="harmonic-pills">
+      <span class="h-pill primary inactive" onclick="navigateBack()">${primSym} <span class="pill-label">primary</span></span>
+      <span class="h-pill alt active-pill">${sym} rootless <span class="pill-label">Rootless (9)</span></span>
+    </div>`;
+  }
 }
 
 function pick(idx) {
