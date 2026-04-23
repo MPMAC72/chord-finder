@@ -32,7 +32,7 @@
   }
 
   /* ── Header ── */
-  header { text-align:center; padding:2rem 1rem 1.5rem; border-bottom:1px solid var(--fret-line); position:relative; }
+  header { text-align:center; padding:2rem 1rem 1.5rem; padding-top: calc(2rem + env(safe-area-inset-top)); border-bottom:1px solid var(--fret-line); position:relative; }
   header::after { content:''; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%); width:60px; height:2px; background:var(--gold); }
   .logo-tag { font-size:.58rem; letter-spacing:.45em; color:var(--gold-dim); text-transform:uppercase; margin-bottom:.5rem; }
   h1 { font-family:'Playfair Display',serif; font-size:clamp(1.6rem,4vw,2.6rem); font-weight:900; color:var(--cream); line-height:1; letter-spacing:-.02em; }
@@ -163,8 +163,7 @@
       position:static; height:auto;
       border-right:none; border-bottom:1px solid var(--fret-line);
       padding:.75rem 1rem;
-      flex-direction:row;
-      align-items:flex-start;
+      flex-direction:column;
       gap:.5rem;
     }
     .btn-group-label { display:none; }
@@ -173,6 +172,7 @@
       flex-wrap:wrap;
       gap:.25rem;
     }
+    #harmonicBar { margin-top:.5rem !important; }
     .sel-btn.type-btn { font-size:.72rem; padding:.32rem .55rem; }
     .type-divider { display:none; }
 
@@ -207,7 +207,7 @@
 <div class="top-bar">
   <div class="btn-group-label">Root</div>
   <div class="btn-grid-root" id="rootBtns"></div>
-  <div id="harmonicBar" style="margin-top:.6rem;min-height:1.6rem;"></div>
+  <div id="harmonicBar" style="margin-top:.6rem;min-height:1.4rem;"></div>
 </div>
 
 <div class="app-layout">
